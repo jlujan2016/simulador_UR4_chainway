@@ -1,0 +1,10 @@
+[package]
+name = "ur4_simulador"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+rand = "0.8"
+hex = "0.4.3"
