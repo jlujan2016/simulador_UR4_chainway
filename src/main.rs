@@ -6,7 +6,7 @@ use rand::Rng;
 // =========================
 // 🔧 MISMO build_command que el programa principal
 // =========================
-fn build_frame_tag(epc: &[u8]) -> Vec<u8> {
+fn build_frame_tag(epc: &[u8], antena: u8) -> Vec<u8> {
     // Construimos el payload igual al UR4 real:
     // [metadata_hi, metadata_lo, EPC bytes..., rssi_hi, rssi_lo, extra_hi, extra_lo]
     let mut payload: Vec<u8> = Vec::new();
@@ -30,7 +30,8 @@ fn build_frame_tag(epc: &[u8]) -> Vec<u8> {
     let mut rng = rand::thread_rng();
     payload.push(0xFD);
     payload.push(rng.gen_range(0x80..=0xFF)); // señal aleatoria
-    payload.push(0x01);
+    //payload.push(0x01); // ← este byte sobra
+    payload.push(antena); 
 
     // Ahora envolvemos el payload en la trama UR4 real:
     // [A5][5A][len_hi][len_lo][83][...payload...][checksum][0D][0A]
@@ -76,16 +77,27 @@ async fn main() -> anyhow::Result<()> {
         vec![0x01, 0x83],                    // tag corto  → EPC: "0183"
         vec![0x00, 0x41, 0x01, 0x02],        // tag medio  → EPC: "00410102"
         vec![0x00, 0x41, 0x00, 0x02],        // tag medio  → EPC: "00410002"
+        vec![0x01, 0x77], 
     ];
+    // Solo 4 antenas válidas — igual que el hardware real
+    let antenas: [u8; 4] = [1, 2, 3, 4];
 
     let mut rng = rand::thread_rng();
+    let mut antena_idx   = 0usize;
 
     loop {
         // Elegir un tag aleatorio de la lista
         let tag = &tags[rng.gen_range(0..tags.len())];
-        let frame = build_frame_tag(tag);
+        // Rotar antenas en orden: 1 → 2 → 3 → 4 → 1 → ...
+        let antena = antenas[antena_idx % 4];
+        antena_idx += 1;
+         let frame   = build_frame_tag(tag, antena);
 
         let epc_hex = hex::encode(tag);
+        println!(
+            "📡 TAG: {}  antena enviada: {}  byte_antena_en_frame: {:02X}",
+            epc_hex, antena, frame[frame.len() - 3]
+        );
         println!("📡 Enviando TAG: {} → frame: {:02X?}", epc_hex, frame);
 
         match socket.write_all(&frame).await {
